@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.30413.136
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WI5000Controller", "WI5000Controller\WI5000Controller.csproj", "{A79441A9-00DD-4F16-9DC3-BC8D3BEB01AB}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{A79441A9-00DD-4F16-9DC3-BC8D3BEB01AB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A79441A9-00DD-4F16-9DC3-BC8D3BEB01AB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A79441A9-00DD-4F16-9DC3-BC8D3BEB01AB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A79441A9-00DD-4F16-9DC3-BC8D3BEB01AB}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {989C9836-205F-4092-93C4-CA9BFD95BD1A}
+	EndGlobalSection
+EndGlobal
