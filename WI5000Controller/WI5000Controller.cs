@@ -106,7 +106,7 @@ namespace WI5000_Controller
                     //get image size
                     Bitmap src = null;
                     state = WI.StartImageLog(baseFolder);
-                    src = new Bitmap(baseFolder + "");
+                    src = new Bitmap(baseFolder + "圖像輸出時間點的年月日_時分秒_測量次數_IMG_圖像類別_綜合判定.bmp");
                     size[0] = src.Height;
                     size[1] = src.Width;
                     if (state == 0)
@@ -447,7 +447,7 @@ namespace WI5000_Controller
             int state = WI.StartImageLog(baseFolder);
             if (state == 0)
             {
-                src = new Bitmap(baseFolder + "");
+                src = new Bitmap(baseFolder + "圖像輸出時間點的年月日_時分秒_測量次數_IMG_圖像類別_綜合判定.bmp");
                 Emgu.CV.Image<Bgra, Byte> img = src.ToImage<Bgra, Byte>();
                 addLog("Get image succeeded", LogType.Info);
                 return img;
