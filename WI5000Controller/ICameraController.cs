@@ -14,13 +14,13 @@ namespace Corex.Controller.Camera
 
     public interface ICameraController : IController
     {
-        double[] GetFrameSize(); //ExecuteCommand("BC") -> Emgu.CV
-        double GetFrameHeight(); //ExecuteCommand("BC") -> Emgu.CV
-        double GetFrameWidth(); //ExecuteCommand("BC") -> Emgu.CV
+        double[] GetFrameSize(); 
+        double GetFrameHeight();
+        double GetFrameWidth(); 
         double GetFPS();
-        bool IsValid(); //Connected
+        bool IsValid(); 
 
-        Image<Bgra, byte> GetImage(); //ExecuteCommand("BC") -> Emgu.CV
+        Image<Bgra, byte> GetImage(); 
         Image<Bgra, byte> CutTriggerBuffer();
         List<Image<Bgra, byte>> GetTriggerBuffer();
 
@@ -34,9 +34,9 @@ namespace Corex.Controller.Camera
         bool GetTriggerMode();
         bool SetTrigger(bool triggerMode);
 
-        bool IsGrabbing(); //ExecuteCommand("RM") -> if return value == 0 && command response == 1 -> true
-        void StartGrab(); //ExecuteCommand("TE,1")
-        void StopGrab(); //ExecuteCommand("TE,0")
+        bool IsGrabbing();
+        void StartGrab();
+        void StopGrab();
 
         void SoftwareTrigger();
     }
