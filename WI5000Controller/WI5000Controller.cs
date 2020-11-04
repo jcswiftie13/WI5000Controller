@@ -20,6 +20,8 @@ using Corex.UI.Widget;
 using Corex.Log;
 using Corex.Log.ANLog.FileLog;
 using Corex.Controller.Camera;
+using System.Windows.Forms.VisualStyles;
+using WILib;
 
 namespace WI5000_Controller
 {
@@ -29,23 +31,7 @@ namespace WI5000_Controller
         private string tag = "WI-5000 Controller";
         private string baseFolder = @"C:\work";
         private double[] size = new double[2];
-
-        private void initLog()
-        {
-            // Logger
-            FileProxy fileProxy = new FileProxy(@".\logs\WI-5000.log", 50000, 100);
-
-            if (Corex.Env.DEBUG)
-            {
-                Logger.Init(true, fileProxy);
-            }
-            else
-            {
-                Logger.Init(false, fileProxy);
-            }
-            Logger.EnableCollapsing(15, 1.0);
-
-        }
+        private static int imgCount = 0;
 
         enum LogType
         {
@@ -72,194 +58,159 @@ namespace WI5000_Controller
             {
                 Logger.E(tag, "The loggerResult's logType is incorrect.");
             }
+            Console.WriteLine(message);
         }
-        public WI5000Controller()
+
+        private bool StateProcessor(int state, string func)
         {
-            initLog();
-            int state = WI.Initialize();
             if (state == 0)
             {
-                addLog("Initialized", LogType.Info);
-                MessageBox.Show("Initialized");
+                addLog($"Succeeded in {func}", LogType.Info);
+                return true;
+            }
+            else if (state == 1100)
+            {
+                addLog($"Communication error in {func}, code: {state}", LogType.Error);
+                MessageBox.Show($"Communication error in {func}, code: {state}");
+                return false;
             }
             else
             {
-                addLog("Initialization failed", LogType.Info);
-                MessageBox.Show("Initialization failed");
-            } 
+                addLog($"Execution error in {func}, code: {state}", LogType.Error);
+                MessageBox.Show($"Execution error in {func}, code: {state}");
+                return false;
+            }
+        }
+
+        private void axWI1_OnImageLogDataReceived(object sender, AxWILib._DWIEvents_OnImageLogDataReceivedEvent e)
+        {
+            if (StateProcessor(e.state, "Image received"))
+            {
+                imgCount += 1;
+            }
+        }
+
+        public WI5000Controller(string ip = "192.168.10.20", int port = 8500) //設備預設的ip和port
+        {
+            int state = WI.Initialize();
+            StateProcessor(state, "Initialize()");
+            WI.Address = ip;
+            WI.Port = port;
+            
+        }
+
+        public enum State : int
+        {
+            Off, Ready, Running, Error, Pause
         }
 
         public bool Startup()
         {
             //make connection
-            WI.Address = "192.168.10.20";
-            WI.Port = 8500;
-            int state = WI.Connect();
-
-            if (state == 0)
+            if (StateProcessor(WI.Connect(), "Startup()"))
             {
+                //切換到運轉模式
                 string response = null;
-                state = WI.ExecuteCommand("R0", ref response);
-
-                if (state == 0)
+                if (StateProcessor(WI.ExecuteCommand("R0", ref response), "Operation mode"))
                 {
-                    //get image size
-                    Bitmap src = null;
-                    state = WI.StartImageLog(baseFolder);
-                    src = new Bitmap(baseFolder + "圖像輸出時間點的年月日_時分秒_測量次數_IMG_圖像類別_綜合判定.bmp");
-                    size[0] = src.Height;
-                    size[1] = src.Width;
-                    if (state == 0)
+                    if (GetTriggerMode())
                     {
-                        addLog("Startup and image capture succeeded", LogType.Info);
+                        SoftwareTrigger();
+                    }
+                    if (StateProcessor(WI.StartImageLog(baseFolder), "StartImageLog()"))
+                    {
+                        Bitmap src = null;
+                        src = new Bitmap(baseFolder + $"{imgCount}_OUTPUT_IMG_HEIGHT_OK.bmp"); //文件名格式: 連號_指定字串_IMG_圖像類別*_綜合判定.bmp
+                        size[0] = src.Height;
+                        size[1] = src.Width;
+
                         return true;
                     }
-                    else
-                    {
-                        addLog("Image caption error: " + state, LogType.Error);
-                        MessageBox.Show("Image caption error: " + state);
-                        return false;
-                    }
-                }
-                else
-                {
-                    addLog("Not in operation mode", LogType.Error);
-                    MessageBox.Show("Not in operation mode");
-                    return false;
                 }
             }
-            else
-            {
-                addLog("Connection Error:" + state, LogType.Error);
-                MessageBox.Show("Connection error: " + state);
-                return false;
-            }
+            return false;
         }
 
         public bool Shutdown()
         {
             WI.Disconnect();
-            addLog($"Device disconnected: {!WI.Connected}", LogType.Info);
-            return !WI.Connected;
+            bool connected = WI.Connected;
+            addLog($"Device disconnected: {!connected}", LogType.Info);
+            return !connected;
         }
 
         public bool Reset()
         {
-            addLog($"reset: {Shutdown() && Startup()}", LogType.Info);
-            return Shutdown() && Startup();
+            bool reset = Shutdown() && Startup();
+            addLog($"reset: {reset}", LogType.Info);
+            return reset;
         }
 
         public bool IsValid()
         {
-            addLog($"Check connection, connected: {WI.Connected}", LogType.Info);
-            return WI.Connected;
+            bool connected = WI.Connected;
+            addLog($"Check connection, connected: {connected}", LogType.Info);
+            return connected;
         }
 
         public string GetProperty()
         {
             string response = null;
-            int state = WI.ExecuteCommand("PR\r", ref response);
-            if (state == 0)
+            if (StateProcessor(WI.ExecuteCommand("PR\r", ref response), "GetProperty()"))
             {
                 string[] analyzed = response.Split(',');
                 response = analyzed[2];
                 addLog($"Device property: {response}", LogType.Info);
                 return response;
             }
-            else if (state == 1100)
-            {
-                addLog($"Communication error in getting property", LogType.Error);
-                MessageBox.Show("Communication error");
-                return response;
-            }
-            else
-            {
-                addLog($"Execution error in getting property", LogType.Error);
-                MessageBox.Show("Execution error");
-                return response;
-            }
+            return null;
         }
 
         public string GetPropertyWithoutDeviceInfo()
         {
-            string response = null;
-            int state = WI.ExecuteCommand("PR\r", ref response);
-            if (state == 0)
-            {
-                string[] analyzed = response.Split(',');
-                response = analyzed[2];
-                addLog($"Device property: {response}", LogType.Info);
-                return response;
-            }
-            else if (state == 1100)
-            {
-                addLog($"Communication error in getting property", LogType.Error);
-                MessageBox.Show("Communication error");
-                return response;
-            }
-            else
-            {
-                addLog($"Execution error in getting property", LogType.Error);
-                MessageBox.Show("Execution error");
-                return response;
-            }
+            return GetProperty();
         }
 
         public void SetProperty(string property, bool update)
         {
             string response = null;
-            int state = WI.ExecuteCommand("PW," + $"{property.Split()[0]},{property.Split()[1]}\r", ref response);
-            if (state == 0)
+            if (StateProcessor(WI.ExecuteCommand("PW," + $"{property.Split()[0]},{property.Split()[1]}\r", ref response), "SetProperty()"))
             {
-                addLog("Set property succeeded", LogType.Info);
-            }
-            else if (state == 1100)
-            {
-                addLog("Communication error in setting property", LogType.Error);
-                MessageBox.Show("Communication error");
-            }
-            else
-            {
-                addLog("Execution error in setting property", LogType.Error);
-                MessageBox.Show("Execution error");
+                addLog($"Property set to {property.Split()[1]}", LogType.Info);
             }
         }
 
         public void SetTriggerFunc(DTriggerImage triggerImage)
         {
+
         }
+
+        //假設內部和外部觸發兩兩一組編號, 內部觸發是單數, 外部觸發雙數, 而triggermode true為外部觸發
         public bool GetTriggerMode()
         {
             string response = null;
-            int state = WI.ExecuteCommand("PR\r", ref response);
-            if (state == 0)
+            if (StateProcessor(WI.ExecuteCommand("PR\r", ref response), "GetTriggerMode()"))
             {
                 string[] analyzed = response.Split(',');
                 response = analyzed[2];
-                addLog("Get trigger mode succeeded", LogType.Info);
-                return true;
+                if (Convert.ToInt32(response) % 2 == 0)
+                {
+                    return true;
+                }
+                else
+                {
+                    return false;
+                }
             }
-            else if (state == 1100)
-            {
-                addLog("Communication error in getting trigger mode", LogType.Error);
-                MessageBox.Show("Communication error");
-                return false;
-            }
-            else
-            {
-                addLog("Execution error in getting trigger mode", LogType.Error);
-                MessageBox.Show("Execution error");
-                return false;
-            }
+            return false;
         }
+
         public bool SetTrigger(bool triggerMode)
         {
-            //假設內部和外部觸發兩兩一組編號, 內部觸發是單數, 外部觸發雙數, 而triggermode true為外部觸發
             if (triggerMode == true)
             {
                 string response = null;
-                int state = WI.ExecuteCommand("PR\r", ref response);
-                if (state == 0)
+                if (StateProcessor(WI.ExecuteCommand("PR\r", ref response), "GetTrigger()"))
                 {
                     string[] analyzed = response.Split(',');
                     response = analyzed[2];
@@ -270,221 +221,93 @@ namespace WI5000_Controller
                     }
                     else
                     {
-                        state = WI.ExecuteCommand("PW," + $"1,{Convert.ToInt32(response) + 1}\r", ref response);
-                        if (state == 0)
+                        if (StateProcessor(WI.ExecuteCommand("PW," + $"1,{Convert.ToInt32(response) + 1}\r", ref response), "SetTrigger()"))
                         {
-                            addLog("Trigger mode set to True", LogType.Info);
+                            addLog("Trigger mode set to true", LogType.Info);
                             return true;
-                        }
-                        else if (state == 1100)
-                        {
-                            addLog("Communication error in setting trigger mode", LogType.Error);
-                            MessageBox.Show("Communication error");
-                            return false;
-                        }
-                        else
-                        {
-                            addLog("Execution error in setting trigger mode", LogType.Error);
-                            MessageBox.Show("Execution error");
-                            return false;
                         }
                     }
                 }
-                else if (state == 1100)
-                {
-                    addLog("Communication error in getting trigger mode", LogType.Error);
-                    MessageBox.Show("Communication error");
-                    return false;
-                }
-                else
-                {
-                    addLog("Execution error in getting trigger mode", LogType.Error);
-                    MessageBox.Show("Execution error");
-                    return false;
-                }
+                return false;
             }
             else
             {
                 string response = null;
-                int state = WI.ExecuteCommand("PR\r", ref response);
-                if (state == 0)
+                if (StateProcessor(WI.ExecuteCommand("PR\r", ref response), "GetTrigger()"))
                 {
                     string[] analyzed = response.Split(',');
                     response = analyzed[2];
-                    if (Convert.ToInt32(response) % 2 != 0)
+                    if (Convert.ToInt32(response) % 2 == 0)
                     {
+                        addLog("Trigger mode was already in false", LogType.Info);
                         return true;
                     }
                     else
                     {
-                        state = WI.ExecuteCommand("PW," + $"1,{Convert.ToInt32(response) - 1}\r", ref response);
-                        if (state == 0)
+                        if (StateProcessor(WI.ExecuteCommand("PW," + $"1,{Convert.ToInt32(response) - 1}\r", ref response), "SetTrigger()"))
                         {
+                            addLog("Trigger mode set to false", LogType.Info);
                             return true;
-                        }
-                        else if (state == 1100)
-                        {
-                            addLog("Communication error in setting trigger mode", LogType.Error);
-                            MessageBox.Show("Communication error");
-                            return false;
-                        }
-                        else
-                        {
-                            addLog("Execution error in setting trigger mode", LogType.Error);
-                            MessageBox.Show("Execution error");
-                            return false;
                         }
                     }
                 }
-                else if (state == 1100)
-                {
-                    addLog("Communication error in getting trigger mode", LogType.Error);
-                    MessageBox.Show("Communication error");
-                    return false;
-                }
-                else
-                {
-                    addLog("Execution error in getting trigger mode", LogType.Error);
-                    MessageBox.Show("Execution error");
-                    return false;
-                }
+                return false;
             }
         }
 
         public bool IsGrabbing()
         {
-            string response = null;
-            int state = WI.ExecuteCommand("RM\r", ref response);
-            if (state == 0)
+            if (WI.ImageLogStarted)
             {
-                if (response == "1")
-                {
-                    addLog("Device is grabbing", LogType.Info);
-                    return true;
-                }
-                else
-                {
-                    addLog("Device is not grabbing", LogType.Info);
-                    return false;
-                }
+                return true;
             }
-            else if (state == 1100)
-            {
-                addLog("Communication error in \"IsGrabbing\" function", LogType.Error);
-                MessageBox.Show("Communication error");
-                return false;
-            }
-            else
-            {
-                addLog($"Execution error: {state} in \"IsGrabbing\" function", LogType.Error);
-                MessageBox.Show($"Execution error: {state}");
-                return false;
-            }
-
+            return false;
         }
 
         public void StartGrab()
         {
-            String response = null;
-            int state = WI.ExecuteCommand("TE,1\r", ref response);
-            if (state == 0)
+            if (StateProcessor(WI.StartImageLog(baseFolder), "StartGrab()"))
             {
                 addLog("Start grabbing", LogType.Info);
-            }
-            else if (state == 1100)
-            {
-                addLog("Communication error in \"StartGrab\" method", LogType.Error);
-                MessageBox.Show("Communication error");
-            }
-            else
-            {
-                addLog($"Execution error: {state} in \"StartGrab\" method", LogType.Error);
-                MessageBox.Show($"Execution error: {state}");
             }
         }
 
         public void StopGrab()
         {
-            String response = null;
-            int state = WI.ExecuteCommand("TE,0\r", ref response);
-            if (state == 0)
+            if (StateProcessor(WI.StopImageLog(), "StopGrab()"))
             {
                 addLog("Stop grabbing", LogType.Info);
-            }
-            else if (state == 1100)
-            {
-                addLog("Communication error in \"StopGrab\" method", LogType.Error);
-                MessageBox.Show("Communication error");
-            }
-            else
-            {
-                addLog($"Execution error: {state} in \"SttopGrab\" method", LogType.Error);
-                MessageBox.Show($"Execution error: {state}");
             }
         }
 
         public double[] GetFrameSize()
         {
-            addLog($"Retrieved frame size: {size}", LogType.Info);
             return size;
         }
 
         public double GetFrameHeight()
         {
-            addLog($"Retrieved frame height: {size[0]}", LogType.Info);
             return size[0];
         }
 
         public double GetFrameWidth()
         {
-            addLog($"Retrieved frame width: {size[1]}", LogType.Info);
             return size[1];
         }
 
         public Emgu.CV.Image<Bgra, Byte> GetImage()
         {
             Bitmap src = null;
-            int state = WI.StartImageLog(baseFolder);
-            if (state == 0)
-            {
-                src = new Bitmap(baseFolder + "圖像輸出時間點的年月日_時分秒_測量次數_IMG_圖像類別_綜合判定.bmp");
-                Emgu.CV.Image<Bgra, Byte> img = src.ToImage<Bgra, Byte>();
-                addLog("Get image succeeded", LogType.Info);
-                return img;
-            }
-            else if (state == 1100)
-            {
-                addLog("Communication error in getting image", LogType.Error);
-                MessageBox.Show("Communication error");
-                return null;
-            }
-            else
-            {
-                addLog("Execution error in getting image", LogType.Error);
-                MessageBox.Show("Execution error");
-                return null;
-            }
+            src = new Bitmap(baseFolder + $"{imgCount}_OUTPUT_IMG_HEIGHT_NG.bmp"); //文件名格式: 連號_指定字串_IMG_圖像類別*_綜合判定.bmp
+            Emgu.CV.Image<Bgra, Byte> img = src.ToImage<Bgra, Byte>();
+            addLog("Succeeded in GetImage()", LogType.Info);
+            return img;
         }
 
         public void SoftwareTrigger()
         {
             string response = null;
-            int state = WI.ExecuteCommand("TG\r", ref response);
-            if (state == 0)
-            {
-                addLog("Software triggered", LogType.Info);
-                MessageBox.Show("Triggered");
-            }
-            else if (state == 1100)
-            {
-                addLog("Communication error in software triggering", LogType.Error);
-                MessageBox.Show("Communication error");
-            }
-            else
-            {
-                addLog("Execution error in software triggering", LogType.Error);
-                MessageBox.Show("Execution error");
-            }
+            StateProcessor(WI.ExecuteCommand("TG\r", ref response), "SoftwareTrigger()");
         }
     }
 }

@@ -2,16 +2,17 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using EnumsNET;
 
 using Newtonsoft.Json.Linq;
 
+using Corex.Controller.Enums;
 using Corex.Log;
 
 namespace Corex.Controller
 {
     public interface IController
     {
+
         Enums.State State { get; }
 
         // 基本Device三大函數.
